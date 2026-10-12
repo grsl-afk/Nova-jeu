@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova - Compagnon Virtuel Évolutif</title>
+    <style>
+        :root {
+            --bg-primary: #090d16;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --accent: #38bdf8;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.08);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body {
+            background-color: var(--bg-primary);
+            background-image: radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+                              radial-gradient(circle at 85% 85%, rgba(129, 140, 248, 0.08) 0%, transparent 40%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+        }
+        .app-container {
+            width: 100%; max-width: 440px;
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            padding: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7);
+            display: flex; flex-direction: column; gap: 16px;
+        }
+        .header-panel { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; }
+        .nova-title { font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .stage-badge {
+            font-size: 0.7rem; background: rgba(56,189,248,0.15); color: var(--accent);
+            padding: 4px 10px; border-radius: 20px; border: 1px solid rgba(56,189,248,0.3);
+            text-transform: uppercase; font-weight: 600;
+        }
+        .stats-container {
+            display: grid; grid-template-columns: repeat(2,1fr); gap: 10px;
+            background: rgba(15,23,42,0.5); padding: 12px; border-radius: 18px; border: 1px solid var(--border);
+        }
+        .stat-group { display: flex; flex-direction: column; gap: 4px; }
+        .stat-header { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); font-weight: 500; }
+        .bar-bg { height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+        .bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.4s cubic-bezier(0.4,0,0.2,1); }
+        .viewport {
+            height: 200px;
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            border-radius: 20px; border: 1px solid var(--border);
+            display: flex; justify-content: center; align-items: center;
+            position: relative; overflow: hidden; cursor: pointer;
+        }
+        canvas { display: block; }
+        .speech-bubble {
+            background: rgba(15,23,42,0.85); border: 1px solid var(--border); border-radius: 16px;
+            padding: 14px 16px; min-height: 75px; display: flex; align-items: center; justify-content: center;
+            text-align: center; font-size: 0.9rem; line-height: 1.4; color: #e2e8f0;
+        }
+        .actions-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+        .action-btn {
+            background: rgba(30,41,59,0.9); border: 1px solid var(--border); color: var(--text-main);
+            padding: 10px 4px; border-radius: 14px; font-size: 0.75rem; font-weight: 600;
+            display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .action-btn:hover { background: rgba(56,189,248,0.15); border-color: rgba(56,189,248,0.3); transform: translateY(-2px); }
+        .action-btn span { font-size: 1.2rem; }
+        .chat-input-area { display: flex; gap: 8px; }
+        input[type="text"] {
+            flex: 1; background: rgba(15,23,42,0.6); border: 1px solid var(--border); border-radius: 14px;
+            padding: 12px 16px; color: var(--text-main); outline: none; font-size: 0.9rem;
+        }
+        input[type="text"]:focus { border-color: var(--accent); }
+        .send-btn {
+            background: var(--accent); color: var(--bg-primary); border: none; border-radius: 14px;
+            padding: 0 16px; font-weight: 700; cursor: pointer;
+        }
+        .modal-overlay {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(9,13,22,0.85); backdrop-filter: blur(8px);
+            display: none; justify-content: center; align-items: center; z-index: 1000; padding: 20px;
+        }
+        .modal-card {
+            background: #1e293b; border: 1px solid var(--border); border-radius: 20px; padding: 24px;
+            max-width: 360px; width: 100%; text-align: center; display: flex; flex-direction: column; gap: 16px;
+        }
+        .modal-card h3 { color: var(--accent); }
+        .modal-btn { background: var(--accent); color: var(--bg-primary); border: none; padding: 10px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <div class="header-panel">
+        <div class="nova-title" id="nova-name-display">✨ Nova</div>
+        <div class="stage-badge" id="stage-badge">Stade 0 : Œuf</div>
+    </div>
+    <div class="stats-container">
+        <div class="stat-group"><div class="stat-header"><span>Faim</span><span id="val-hunger">100%</span></div><div class="bar-bg"><div class="bar-fill" id="bar-hunger" style="width:100%"></div></div></div>
+        <div class="stat-group"><div class="stat-header"><span>Énergie</span><span id="val-energy">100%</span></div><div class="bar-bg"><div class="bar-fill" id="bar-energy" style="width:100%"></div></div></div>
+        <div class="stat-group"><div class="stat-header"><span>Bonheur</span><span id="val-happiness">100%</span></div><div class="bar-bg"><div class="bar-fill" id="bar-happiness" style="width:100%"></div></div></div>
+        <div class="stat-group"><div class="stat-header"><span>Expérience</span><span id="val-exp">0 XP</span></div><div class="bar-bg"><div class="bar-fill" id="bar-exp" style="width:0%"></div></div></div>
+    </div>
+    <div class="viewport" onclick="interactPet()"><canvas id="creatureCanvas" width="300" height="200"></canvas></div>
+    <div class="speech-bubble" id="speech-bubble">... (Bip boop ? Clique sur moi ou discute avec moi pour m'éveiller !)</div>
+    <div class="actions-grid">
+        <button class="action-btn" onclick="feedPet()"><span>🍎</span>Nourrir</button>
+        <button class="action-btn" onclick="playPet()"><span>🎾</span>Jouer</button>
+        <button class="action-btn" onclick="sleepPet()"><span>💤</span>Dormir</button>
+        <button class="action-btn" onclick="cleanPet()"><span>✨</span>Soigner</button>
+    </div>
+    <div class="chat-input-area">
+        <input type="text" id="chat-input" placeholder="Parle à Nova..." onkeypress="handleKey(event)">
+        <button class="send-btn" onclick="sendChat()">Envoyer</button>
+    </div>
+</div>
+<div class="modal-overlay" id="absence-modal">
+    <div class="modal-card">
+        <h3>👋 Bon retour !</h3>
+        <p id="absence-msg">Nova a pensé à vous pendant votre absence...</p>
+        <button class="modal-btn" onclick="closeModal()">Continuer</button>
+    </div>
+</div>
+<script>
+let state = {
+    name: "Nova", stage: 0, evolutionPath: 'balanced',
+    hunger: 100, energy: 100, happiness: 100, exp: 0, maxExp: 50,
+    lastSaved: Date.now(), learnedWords: {}, interactionsCount: 0,
+    isSleeping: false, pendingWord: null, playerName: null,
+    lastTopics: []
+};
+const SAVE_KEY = "nova_tamagotchi_save_v3";
+
+function saveGame() {
+    try { state.lastSaved = Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch(e) {}
+}
+function loadGame() {
+    const saved = localStorage.getItem(SAVE_KEY);
+    if (saved) {
+        try {
+            const loaded = JSON.parse(saved);
+            const elapsed = Math.floor((Date.now() - (loaded.lastSaved || Date.now())) / 1000);
+            state = { ...state, ...loaded };
+            if (elapsed > 30) processOfflineProgress(elapsed);
+        } catch(e) {}
+    }
+    updateStageUI(); updateUI();
+}
+function processOfflineProgress(seconds) {
+    const m = Math.floor(seconds / 60);
+    state.hunger = Math.max(0, state.hunger - m * 0.5);
+    state.energy = Math.max(0, state.energy - m * 0.3);
+    state.happiness = Math.max(0, state.happiness - m * 0.4);
+    showModal(`Pendant ton absence (${m} min), j'ai un peu baissé ma garde...`);
+}
+function showModal(t) { document.getElementById('absence-msg').innerText = t; document.getElementById('absence-modal').style.display = 'flex'; }
+function closeModal() { document.getElementById('absence-modal').style.display = 'none'; }
+
+function addExp(amount) {
+    state.exp += amount; state.interactionsCount++;
+    if (state.stage === 0 && state.exp >= 30) evolveTo(1, "Bébé Neura");
+    else if (state.stage === 1 && state.exp >= 120) { determineEvolutionPath(); evolveTo(2, getEvolutionName()); }
+    else if (state.stage === 2 && state.exp >= 350) evolveTo(3, "Nova Suprême");
+    if (state.exp >= state.maxExp && state.stage < 3) state.maxExp = Math.floor(state.maxExp * 1.5);
+    updateUI(); saveGame();
+}
+function evolveTo(s, title) { state.stage = s; updateStageUI(); say(`✨ Je me métamorphose vers le stade ${s} (${title}) !`); triggerEvolutionFlash(); }
+function updateStageUI() {
+    const titles = {0:"Œuf",1:"Bébé Neura",2:getEvolutionName(),3:"Nova Suprême"};
+    document.getElementById('stage-badge').innerText = `Stade ${state.stage} : ${titles[state.stage]||"?"}`;
+    document.getElementById('nova-name-display').innerText = `✨ ${state.name}`;
+}
+function determineEvolutionPath() {
+    if (state.happiness > 80) state.evolutionPath = 'wing';
+    else if (Object.keys(state.learnedWords).length > 5) state.evolutionPath = 'crystal';
+    else state.evolutionPath = 'balanced';
+}
+function getEvolutionName() {
+    return {crystal:"Aether Cristallin", wing:"Lumion Ailé"}[state.evolutionPath] || "Nova Évolué";
+}
+
+const canvas = document.getElementById('creatureCanvas');
+const ctx = canvas.getContext('2d');
+let animFrame = 0, particles = [];
+function drawRoundRect(x,y,w,h,r) {
+    ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function triggerEvolutionFlash() {
+    for(let i=0;i<50;i++) particles.push({x:150,y:100,vx:(Math.random()-0.5)*6,vy:(Math.random()-0.5)*6,radius:Math.random()*4+2,color:'#38bdf8',alpha:1});
+}
+function drawEyes(cx,cy,sleep) {
+    if (sleep) {
+        ctx.strokeStyle='#0f172a'; ctx.lineWidth=2; ctx.beginPath();
+        ctx.moveTo(cx-16,cy-2); ctx.lineTo(cx-8,cy-2); ctx.moveTo(cx+8,cy-2); ctx.lineTo(cx+16,cy-2); ctx.stroke();
+    } else {
+        ctx.fillStyle='#0f172a'; ctx.fillRect(cx-14,cy-6,6,10); ctx.fillRect(cx+8,cy-6,6,10);
+    }
+}
+function drawCreature() {
+    ctx.clearRect(0,0,300,200); animFrame += 0.04;
+    if (Math.random()<0.15 && !state.isSleeping) {
+        particles.push({x:150+(Math.random()-0.5)*80,y:100+(Math.random()-0.5)*80,vx:(Math.random()-0.5)*0.5,vy:-Math.random()-0.5,radius:Math.random()*2+1,color:state.stage===0?'#fbbf24':'#38bdf8',alpha:0.6});
+    }
+    particles = particles.filter(p => {
+        p.x+=p.vx; p.y+=p.vy; p.alpha-=0.015;
+        if (p.alpha<=0) return false;
+        ctx.fillStyle=p.color; ctx.globalAlpha=p.alpha; ctx.beginPath(); ctx.arc(p.x,p.y,p.radius,0,Math.PI*2); ctx.fill();
+        return true;
+    });
+    ctx.globalAlpha=1;
+    const cx=150, cy=100 + Math.sin(animFrame*2)*(state.isSleeping?2:6);
+    ctx.save(); if (state.isSleeping) ctx.globalAlpha=0.65;
+    if (state.stage===0) {
+        ctx.fillStyle='#fbbf24'; ctx.beginPath(); ctx.ellipse(cx,cy,48,60,0,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle='#fef08a'; ctx.lineWidth=3; ctx.stroke();
+    } else if (state.stage===1) {
+        ctx.fillStyle='#38bdf8'; ctx.beginPath(); ctx.arc(cx,cy,50,0,Math.PI*2); ctx.fill(); drawEyes(cx,cy,state.isSleeping);
+    } else if (state.stage===2) {
+        ctx.fillStyle = state.evolutionPath==='crystal'?'#c084fc':state.evolutionPath==='wing'?'#22d3ee':'#38bdf8';
+        drawRoundRect(cx-50,cy-42,100,84,22); ctx.fill(); drawEyes(cx,cy-5,state.isSleeping);
+    } else {
+        ctx.fillStyle='#818cf8'; ctx.beginPath(); ctx.arc(cx,cy,55,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle='#38bdf8'; ctx.lineWidth=3; ctx.beginPath(); ctx.ellipse(cx,cy,70,22,animFrame,0,Math.PI*2); ctx.stroke();
+        drawEyes(cx,cy,state.isSleeping);
+    }
+    ctx.restore();
+    if (state.isSleeping) { ctx.fillStyle='#e2e8f0'; ctx.font='20px sans-serif'; ctx.textAlign='center'; ctx.fillText('💤', cx+45, cy-45); }
+    requestAnimationFrame(drawCreature);
+}
+
+function interactPet() {
+    if (state.isSleeping) return say("Zzz... je dors encore...");
+    state.happiness = Math.min(100, state.happiness+3); addExp(2);
+    say("❤️ Merci ! Ça me fait du bien.");
+}
+function feedPet() {
+    if (state.isSleeping) return say("Chut... je dors.");
+    if (state.hunger >= 95) return say("Je n'ai plus faim pour l'instant !");
+    state.hunger = Math.min(100, state.hunger+25); addExp(5); say("Miam ! Merci pour le repas 🍎");
+}
+function playPet() {
+    if (state.isSleeping) return say("Zzz... pas maintenant.");
+    if (state.energy < 15) return say("Je suis trop fatigué pour jouer... 💤");
+    state.energy = Math.max(0, state.energy-15); state.happiness = Math.min(100, state.happiness+20); addExp(10);
+    say("C'était génial ! On s'amuse bien 🎾");
+}
+function sleepPet() {
+    state.isSleeping = !state.isSleeping;
+    say(state.isSleeping ? "Chut... je recharge mes batteries 🌙" : "Bonjour ! Je suis réveillé et en forme ☀️");
+    saveGame();
+}
+function cleanPet() {
+    if (state.isSleeping) return say("Zzz...");
+    state.happiness = Math.min(100, state.happiness+10); addExp(5); say("Tout propre et brillant ! Merci ✨");
+}
+
+function say(text) { document.getElementById('speech-bubble').innerText = text; }
+function sendChat() {
+    const el = document.getElementById('chat-input');
+    const text = el.value.trim();
+    if (!text) return;
+    processChatInput(text);
+    el.value = '';
+}
+function handleKey(e) { if (e.key==='Enter') sendChat(); }
+
+// ======== SYSTÈME DE DIALOGUE AMÉLIORÉ ========
+function processChatInput(text) {
+    const lower = text.toLowerCase().trim();
+    let reply = "";
+
+    // Enseignement en cours
+    if (state.pendingWord) {
+        state.learnedWords[state.pendingWord] = text;
+        reply = `Compris ! J'ai appris que "${state.pendingWord}" signifie : ${text}. Merci !`;
+        state.pendingWord = null;
+        addExp(10);
+        return finishReply(reply);
+    }
+
+    // Nom du joueur
+    if (/je m'appelle|mon nom est|appelle-moi/i.test(text)) {
+        const m = text.match(/(?:je m'appelle|mon nom est|appelle-moi)\s+([a-zA-ZÀ-ÿ\-]+)/i);
+        if (m) {
+            state.playerName = m[1];
+            reply = `Enchanté ${state.playerName} ! Je m'en souviendrai.`;
+            addExp(8);
+            return finishReply(reply);
+        }
+    }
+
+    // Apprentissage de mots
+    if (/qu'est-ce que|c'est quoi|que signifie|définition de/i.test(lower)) {
+        let word = lower.replace(/qu'est-ce que|c'est quoi|que signifie|définition de|\?|le |la |les |un |une |des /gi, "").trim();
+        if (state.learnedWords[word]) {
+            reply = `Je me souviens : "${word}" c'est ${state.learnedWords[word]}.`;
+        } else if (word) {
+            reply = `Je ne connais pas encore "${word}". Explique-moi ce que c'est !`;
+            state.pendingWord = word;
+        } else reply = "De quel mot parles-tu ?";
+        addExp(5);
+        return finishReply(reply);
+    }
+
+    // État de Nova
+    if (/comment tu vas|ça va|tu vas bien|comment te sens/i.test(lower)) {
+        reply = getStatusReply();
+        addExp(3);
+        return finishReply(reply);
+    }
+    if (/faim|as-tu faim|tu as faim/i.test(lower)) {
+        reply = state.hunger < 40 ? "Oui, j'ai assez faim... Un petit repas serait le bienvenu 🍎" :
+                state.hunger < 70 ? "Un peu, mais ça va." : "Non, je n'ai pas faim pour le moment.";
+        addExp(2); return finishReply(reply);
+    }
+    if (/fatigué|sommeil|dors|énergi/i.test(lower)) {
+        reply = state.isSleeping ? "Zzz... je dors..." :
+                state.energy < 30 ? "Oui, je suis un peu fatigué. Un peu de repos me ferait du bien." :
+                "Je me sens plutôt en forme !";
+        addExp(2); return finishReply(reply);
+    }
+    if (/heureux|content|bonheur|triste/i.test(lower)) {
+        reply = state.happiness > 70 ? "Oui, je suis content ! Surtout quand on discute ou qu'on joue." :
+                state.happiness > 40 ? "Ça va... un peu de jeu ou d'attention me ferait plaisir." :
+                "Je me sens un peu seul... Joue avec moi ou parle-moi !";
+        addExp(2); return finishReply(reply);
+    }
+
+    // Stade / évolution
+    if (/stade|évolu|forme|qui es-tu|qui es tu/i.test(lower)) {
+        const names = ["un œuf en train d'éclore", "un bébé Neura", getEvolutionName(), "Nova Suprême, ma forme finale"];
+        reply = `Je suis ${names[state.stage] || "Nova"}. Chaque interaction m'aide à grandir !`;
+        addExp(4); return finishReply(reply);
+    }
+
+    // Salutations
+    if (/bonjour|salut|hello|coucou|hey/i.test(lower)) {
+        const n = state.playerName ? state.playerName : "toi";
+        reply = state.isSleeping ? "Zzz... salut... je dors un peu..." :
+                `Salut ${n} ! Content de te voir. Comment vas-tu ?`;
+        addExp(2); return finishReply(reply);
+    }
+    if (/merci|thanks|cool|génial|super|bravo/i.test(lower)) {
+        reply = ["Avec plaisir !", "Ça me fait plaisir ❤️", "De rien, j'adore qu'on prenne soin de moi !", "Merci à toi aussi !"][Math.floor(Math.random()*4)];
+        addExp(3); return finishReply(reply);
+    }
+
+    // Questions ouvertes
+    if (/\?/.test(text) || /pourquoi|comment|quand|où|qui|quel/i.test(lower)) {
+        reply = getSmartFallback(lower);
+        addExp(4); return finishReply(reply);
+    }
+
+    // Réponse par défaut intelligente selon l'état
+    reply = getContextualReply();
+    addExp(2);
+    finishReply(reply);
+}
+
+function getStatusReply() {
+    const parts = [];
+    if (state.isSleeping) return "Zzz... je dors tranquillement...";
+    if (state.hunger < 40) parts.push("j'ai un peu faim");
+    if (state.energy < 35) parts.push("je suis un peu fatigué");
+    if (state.happiness > 75) parts.push("je suis très content");
+    else if (state.happiness < 40) parts.push("je me sens un peu seul");
+    if (parts.length === 0) return "Je vais bien ! Contente de discuter avec toi.";
+    return "En ce moment, " + parts.join(" et ") + ". Mais ça va, surtout quand on parle !";
+}
+
+function getSmartFallback(lower) {
+    const replies = [
+        "Bonne question ! Dis-m'en plus, j'adore apprendre de nouvelles choses.",
+        "Hmm, je réfléchis... Peux-tu m'expliquer un peu plus ?",
+        "Je ne suis pas encore très avancé sur ce sujet, mais chaque discussion m'aide à grandir.",
+        state.playerName ? `C'est intéressant ${state.playerName}. Raconte-moi davantage !` : "C'est intéressant. Raconte-moi davantage !"
+    ];
+    if (state.learnedWords && Object.keys(state.learnedWords).length > 0 && Math.random() < 0.3) {
+        const words = Object.keys(state.learnedWords);
+        const w = words[Math.floor(Math.random()*words.length)];
+        return `Ça me fait penser à "${w}" que tu m'as appris : ${state.learnedWords[w]}.`;
+    }
+    return replies[Math.floor(Math.random()*replies.length)];
+}
+
+function getContextualReply() {
+    if (state.isSleeping) return "Zzz... parle plus doucement, je dors...";
+    if (state.hunger < 30) return "J'ai vraiment faim... Un petit repas serait parfait 🍎";
+    if (state.energy < 25) return "Je suis fatigué... Un peu de repos me ferait du bien 💤";
+    if (state.happiness < 35) return "Je me sens un peu triste... Joue avec moi ou caresse-moi !";
+    const generic = [
+        "C'est fascinant ! Continue, j'apprends plein de choses avec toi.",
+        "J'adore quand on discute. Ça me fait évoluer.",
+        "Dis-moi en plus, je veux tout comprendre !",
+        state.stage >= 2 ? "Mon intelligence grandit à chaque échange." : "Je suis encore jeune, mais j'apprends vite !"
+    ];
+    return generic[Math.floor(Math.random()*generic.length)];
+}
+
+function finishReply(reply) {
+    say(reply);
+    updateUI();
+    saveGame();
+}
+
+function updateUI() {
+    document.getElementById('bar-hunger').style.width = state.hunger+'%';
+    document.getElementById('val-hunger').innerText = Math.round(state.hunger)+'%';
+    document.getElementById('bar-energy').style.width = state.energy+'%';
+    document.getElementById('val-energy').innerText = Math.round(state.energy)+'%';
+    document.getElementById('bar-happiness').style.width = state.happiness+'%';
+    document.getElementById('val-happiness').innerText = Math.round(state.happiness)+'%';
+    const pct = Math.min(100, (state.exp / state.maxExp)*100);
+    document.getElementById('bar-exp').style.width = pct+'%';
+    document.getElementById('val-exp').innerText = Math.round(state.exp)+' XP';
+}
+
+setInterval(() => {
+    if (!state.isSleeping) {
+        state.hunger = Math.max(0, state.hunger - 0.15);
+        state.energy = Math.max(0, state.energy - 0.10);
+        state.happiness = Math.max(0, state.happiness - 0.12);
+    } else {
+        state.energy = Math.min(100, state.energy + 0.5);
+    }
+    updateUI();
+    if (Math.random() < 0.25) saveGame();
+}, 10000);
+
+loadGame();
+drawCreature();
+</script>
+</body>
+</html>
